@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct {
     int sign;          /* 0, +1, -1 */
@@ -19,6 +21,40 @@ void bi_set_zero(BigInt *a);
 void bi_set_u32(BigInt *a, uint32_t value);
 void bi_copy(const BigInt *src, BigInt *dst);
 int  bi_is_zero(const BigInt *a);
+
+static inline void bi_copy(const BigInt *src, BigInt *dst) {
+    if (src == dst) {
+        return;
+    }
+
+    if (dst->cap < src->n) {
+        size_t cap = dst->cap ? dst->cap : 1u;
+        while (cap < src->n) {
+            cap <<= 1u;
+        }
+        uint32_t *p = (uint32_t *)realloc(dst->d, cap * sizeof(uint32_t));
+        if (!p) {
+            fprintf(stderr, "Out of memory in bi_copy\n");
+            exit(1);
+        }
+        dst->d = p;
+        dst->cap = cap;
+    }
+
+    if (src->n) {
+        memcpy(dst->d, src->d, src->n * sizeof(uint32_t));
+    }
+    dst->n = src->n;
+    dst->sign = src->sign;
+}
+
+static inline int bi_is_zero(const BigInt *a) {
+    return (a->sign == 0) || (a->n == 0);
+}
+
+static inline int bi_is_one(const BigInt *a) {
+    return (a->sign > 0) && (a->n == 1) && (a->d[0] == 1u);
+}
 
 /* Ввод/вывод (десятичный текст) */
 int  bi_from_string(BigInt *a, const char *s);
@@ -40,6 +76,51 @@ void bi_mul(const BigInt *a, const BigInt *b, BigInt *res);
 int  bi_div(const BigInt *a, const BigInt *b, BigInt *res);
 int  bi_mod(const BigInt *a, const BigInt *m, BigInt *res);
 uint32_t bi_mod_u32(const BigInt *a, uint32_t m);
+
+static inline int bi_mod(const BigInt *a, const BigInt *m, BigInt *res) {
+    if (bi_is_zero(m)) {
+        return 0;
+    }
+
+    BigInt q; bi_init(&q);
+    BigInt prod; bi_init(&prod);
+    BigInt rem; bi_init(&rem);
+
+    if (!bi_div(a, m, &q)) {
+        bi_free(&q);
+        bi_free(&prod);
+        bi_free(&rem);
+        return 0;
+    }
+
+    bi_mul(&q, m, &prod);
+    bi_sub(a, &prod, &rem);
+
+    if (rem.sign < 0) {
+        BigInt mod_abs; bi_init(&mod_abs);
+        bi_copy(m, &mod_abs);
+        mod_abs.sign = (mod_abs.n ? +1 : 0);
+
+        BigInt tmp; bi_init(&tmp);
+        bi_add(&rem, &mod_abs, &tmp);
+        bi_copy(&tmp, res);
+        bi_free(&tmp);
+        bi_free(&mod_abs);
+    } else {
+        bi_copy(&rem, res);
+    }
+
+    if (res->n == 0) {
+        res->sign = 0;
+    } else if (res->sign < 0) {
+        res->sign = +1;
+    }
+
+    bi_free(&q);
+    bi_free(&prod);
+    bi_free(&rem);
+    return 1;
+}
 
 /* Степень: res = a^e, e>=0 (большой показатель) */
 int  bi_pow_bigexp(const BigInt *a, const BigInt *e, BigInt *res);
