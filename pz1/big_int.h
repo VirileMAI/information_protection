@@ -16,9 +16,9 @@ typedef struct {
 void bi_init(BigInt *a);
 void bi_free(BigInt *a);
 void bi_set_zero(BigInt *a);
+void bi_set_u32(BigInt *a, uint32_t value);
 void bi_copy(const BigInt *src, BigInt *dst);
 int  bi_is_zero(const BigInt *a);
-int  bi_is_one(const BigInt *a);
 
 /* Ввод/вывод (десятичный текст) */
 int  bi_from_string(BigInt *a, const char *s);
@@ -39,6 +39,7 @@ void bi_mul(const BigInt *a, const BigInt *b, BigInt *res);
 /* Деление с усечением к нулю: res = a / b; возвращает 1 при успехе, 0 если b==0 */
 int  bi_div(const BigInt *a, const BigInt *b, BigInt *res);
 int  bi_mod(const BigInt *a, const BigInt *m, BigInt *res);
+uint32_t bi_mod_u32(const BigInt *a, uint32_t m);
 
 /* Степень: res = a^e, e>=0 (большой показатель) */
 int  bi_pow_bigexp(const BigInt *a, const BigInt *e, BigInt *res);
