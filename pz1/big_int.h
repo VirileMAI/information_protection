@@ -18,6 +18,9 @@ typedef struct {
 void bi_init(BigInt *a);
 void bi_free(BigInt *a);
 void bi_set_zero(BigInt *a);
+void bi_set_u32(BigInt *a, uint32_t value);
+void bi_copy(const BigInt *src, BigInt *dst);
+int  bi_is_zero(const BigInt *a);
 
 static inline void bi_copy(const BigInt *src, BigInt *dst) {
     if (src == dst) {
@@ -71,6 +74,8 @@ void bi_sub(const BigInt *a, const BigInt *b, BigInt *res);
 void bi_mul(const BigInt *a, const BigInt *b, BigInt *res);
 /* Деление с усечением к нулю: res = a / b; возвращает 1 при успехе, 0 если b==0 */
 int  bi_div(const BigInt *a, const BigInt *b, BigInt *res);
+int  bi_mod(const BigInt *a, const BigInt *m, BigInt *res);
+uint32_t bi_mod_u32(const BigInt *a, uint32_t m);
 
 static inline int bi_mod(const BigInt *a, const BigInt *m, BigInt *res) {
     if (bi_is_zero(m)) {
