@@ -123,26 +123,26 @@ void bi_init(BigInt *a){ a->sign=0; a->d=NULL; a->n=0; a->cap=0; }
 void bi_free(BigInt *a){ free(a->d); a->d=NULL; a->n=a->cap=0; a->sign=0; }
 void bi_set_zero(BigInt *a){ a->sign=0; a->n=0; }
 
-void bi_copy(const BigInt *src, BigInt *dst){
-    if (src == dst) return;
-    if (src->n == 0){
-        bi_set_zero(dst);
-        return;
+void bi_set_u32(BigInt *a, uint32_t value){
+    if (value == 0){ bi_set_zero(a); return; }
+    bi_reserve(a, 2);
+    size_t n = 0;
+    while (value){
+        a->d[n++] = value % BI_BASE;
+        value /= BI_BASE;
     }
+    a->n = n;
+    a->sign = +1;
+}
 
+void bi_copy(const BigInt *src, BigInt *dst){
     bi_reserve(dst, src->n);
     memcpy(dst->d, src->d, src->n * sizeof(uint32_t));
     dst->n = src->n;
     dst->sign = src->sign;
 }
 
-int bi_is_zero(const BigInt *a){
-    return (a->sign == 0) || (a->n == 0);
-}
-
-int bi_is_one(const BigInt *a){
-    return (a->sign > 0) && (a->n == 1) && (a->d[0] == 1u);
-}
+int bi_is_zero(const BigInt *a){ return a->sign==0 || a->n==0; }
 
 //Парсинг и вывод
 int bi_from_string(BigInt *a, const char *s){
@@ -359,7 +359,6 @@ void bi_mul(const BigInt *a, const BigInt *b, BigInt *res) {
     }
 }
 
-//Деление
 static void sub_shifted(BigInt* a, const BigInt* b, size_t shift){
     int64_t carry=0;
     for(size_t i=0;i<a->n;++i){
@@ -449,39 +448,58 @@ int bi_div(const BigInt *A, const BigInt *B, BigInt *Q){
 
 int bi_mod(const BigInt *A, const BigInt *M, BigInt *R){
     if (bi_is_zero(M)) return 0;
+    if (bi_is_zero(A)){ bi_set_zero(R); return 1; }
+
+    BigInt a; bi_init(&a); bi_copy(A,&a); a.sign=+1;
+    BigInt m; bi_init(&m); bi_copy(M,&m); m.sign=+1;
+
+    int cmp = bi_cmp_abs(&a,&m);
+    if (cmp < 0){
+        bi_copy(&a,R);
+        R->sign = (R->n?+1:0);
+        bi_free(&a); bi_free(&m);
+        return 1;
+    }
+    if (cmp == 0){
+        bi_set_zero(R);
+        bi_free(&a); bi_free(&m);
+        return 1;
+    }
 
     BigInt q; bi_init(&q);
+    if (!bi_div(&a, &m, &q)){ bi_free(&a); bi_free(&m); bi_free(&q); return 0; }
+
     BigInt prod; bi_init(&prod);
+    bi_mul(&q, &m, &prod);
+
     BigInt rem; bi_init(&rem);
+    bi_sub(&a, &prod, &rem);
+    rem.sign = (rem.n?+1:0);
 
-    if (!bi_div(A, M, &q)){
-        bi_free(&q); bi_free(&prod); bi_free(&rem);
-        return 0;
-    }
+    bi_copy(&rem, R);
+    R->sign = (R->n?+1:0);
 
-    bi_mul(&q, M, &prod);
-    bi_sub(A, &prod, &rem);
-
-    if (rem.sign < 0){
-        BigInt mod_abs; bi_init(&mod_abs);
-        bi_copy(M, &mod_abs);
-        mod_abs.sign = (mod_abs.n ? +1 : 0);
-
-        BigInt tmp; bi_init(&tmp);
-        bi_add(&rem, &mod_abs, &tmp);
-        bi_copy(&tmp, R);
-        bi_free(&tmp);
-        bi_free(&mod_abs);
-    } else {
-        bi_copy(&rem, R);
-    }
-
-    if (R->n == 0) R->sign = 0;
-    else if (R->sign < 0) R->sign = +1;
-
-    bi_free(&q); bi_free(&prod); bi_free(&rem);
+    bi_free(&rem);
+    bi_free(&prod);
+    bi_free(&q);
+    bi_free(&a);
+    bi_free(&m);
     return 1;
 }
+
+uint32_t bi_mod_u32(const BigInt *a, uint32_t m){
+    if (m==0) return 0;
+    if (bi_is_zero(a)) return 0;
+    uint64_t rem = 0;
+    for (size_t i=a->n; i-- > 0; ){
+        rem = (rem * BI_BASE + a->d[i]) % m;
+    }
+    if (a->sign < 0 && rem){
+        rem = m - rem;
+    }
+    return (uint32_t)rem;
+}
+
 
 //Степень
 int bi_pow_bigexp(const BigInt *a, const BigInt *e, BigInt *res){
